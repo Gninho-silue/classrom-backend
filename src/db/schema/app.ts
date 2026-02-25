@@ -32,7 +32,6 @@ export const subjectRelations = relations(subjects, ({ one, many }) => ({
         fields: [subjects.departmentId],
         references: [departments.id],
     }),
-    subjects: many(subjects),
 }));
 
 export type Department = typeof departments.$inferSelect;
