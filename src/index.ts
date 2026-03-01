@@ -1,5 +1,6 @@
 import express from 'express';
 import subjectsRouter from './routes/subjects';
+import cloudinaryRouter from './routes/cloudinary';
 import cors from 'cors';
 
 const app = express();
@@ -27,6 +28,9 @@ app.get('/', (req, res) => {
 
 // Subjects routes
 app.use('/api/subjects', subjectsRouter);
+
+// Cloudinary routes
+app.use('/api/cloudinary', cloudinaryRouter);
 
 // Start server
 app.listen(PORT, () => {
