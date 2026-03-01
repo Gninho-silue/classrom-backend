@@ -15,6 +15,13 @@
       "when": 1772366205275,
       "tag": "0001_amusing_exiles",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772368208805,
+      "tag": "0002_gorgeous_sabra",
+      "breakpoints": true
     }
   ]
 }

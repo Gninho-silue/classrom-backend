@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "account_provider_account_id_key" ON "account" USING btree ("provider_id","account_id");--> statement-breakpoint
+ALTER TABLE "classes" ADD CONSTRAINT "classes_capacity_positive" CHECK ("classes"."capacity" > 0);

@@ -2,6 +2,7 @@ import express from 'express';
 import subjectsRouter from './routes/subjects';
 import cloudinaryRouter from './routes/cloudinary';
 import cors from 'cors';
+import securityMiddleware from './middleware/security';
 
 const app = express();
 const PORT = 8000;
@@ -20,6 +21,7 @@ app.use(cors({
 
 // Middleware
 app.use(express.json());
+app.use(securityMiddleware);
 
 // Root GET route
 app.get('/', (req, res) => {
