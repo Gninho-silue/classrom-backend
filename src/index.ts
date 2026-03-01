@@ -15,7 +15,7 @@ if (!FRONTEND_URL) {
 // CORS configuration
 app.use(cors({
   origin: FRONTEND_URL,
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true
 }));
 

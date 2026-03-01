@@ -5,14 +5,14 @@ import type { ArcjetNodeRequest } from "@arcjet/node";
 
 
 const securityMiddleware = async (req: Request, res: Response, next: NextFunction) => {
-    if(process.env.NODE_ENV === "test") return next();
-    
+    if (process.env.NODE_ENV === "test") return next();
+    if (req.method === "OPTIONS") return next();
     try {
         const role: RateLimitRole = req.user?.role || "guest";
 
         let limit: number;
         let message: string;
-    
+
         switch (role) {
             case "admin":
                 limit = 20
@@ -28,14 +28,14 @@ const securityMiddleware = async (req: Request, res: Response, next: NextFunctio
                 message = "Guest requests limit exceeded (5 per minute). Please sign up or log in to continue!";
                 break;
         }
-        
+
         const client = aj.withRule(
-           slidingWindow({
-            mode: 'LIVE',
-            interval: '1m',
-            max: limit,
-            
-           })
+            slidingWindow({
+                mode: 'LIVE',
+                interval: '1m',
+                max: limit,
+
+            })
         )
 
         const arjectRequest: ArcjetNodeRequest = {
@@ -43,27 +43,28 @@ const securityMiddleware = async (req: Request, res: Response, next: NextFunctio
             method: req.method,
             url: req.url,
             socket: req.socket,
+            ...(req.user?.id && { userId: req.user.id }),
         }
 
         const decision = await client.protect(arjectRequest);
 
-        if(decision.isDenied() && decision.reason.isBot()) {
-            return res.status(403).json({ error: "Forbidden", message: "Automated requests are not allowed"});
+        if (decision.isDenied() && decision.reason.isBot()) {
+            return res.status(403).json({ error: "Forbidden", message: "Automated requests are not allowed" });
         }
 
-        if(decision.isDenied() && decision.reason.isShield()) {
-            return res.status(403).json({ error: "Forbidden", message: "Request blocked by security policy"});
+        if (decision.isDenied() && decision.reason.isShield()) {
+            return res.status(403).json({ error: "Forbidden", message: "Request blocked by security policy" });
         }
 
-        if(decision.isDenied() && decision.reason.isRateLimit()) {
-            return res.status(429).json({ error: "Too many requests", message: message});
+        if (decision.isDenied() && decision.reason.isRateLimit()) {
+            return res.status(429).json({ error: "Too many requests", message: message });
         }
 
         next();
 
     } catch (error) {
         console.error("Security middleware error:", error);
-        return res.status(500).json({ error: "Internal server error", message: "Something went wrong with security middleware"});
+        return res.status(500).json({ error: "Internal server error", message: "Something went wrong with security middleware" });
     }
 }
 
