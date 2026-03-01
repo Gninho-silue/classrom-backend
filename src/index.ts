@@ -2,6 +2,7 @@ import express from 'express';
 import subjectsRouter from './routes/subjects';
 import cloudinaryRouter from './routes/cloudinary';
 import cors from 'cors';
+import securityMiddleware from './middleware/security';
 
 const app = express();
 const PORT = 8000;
@@ -14,12 +15,13 @@ if (!FRONTEND_URL) {
 // CORS configuration
 app.use(cors({
   origin: FRONTEND_URL,
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true
 }));
 
 // Middleware
 app.use(express.json());
+app.use(securityMiddleware);
 
 // Root GET route
 app.get('/', (req, res) => {
