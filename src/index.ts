@@ -1,8 +1,9 @@
 import express from 'express';
 import subjectsRouter from './routes/subjects';
-import cloudinaryRouter from './routes/cloudinary';
 import cors from 'cors';
 import securityMiddleware from './middleware/security';
+import { auth } from './lib/auth';
+import { toNodeHandler } from "better-auth/node";
 
 const app = express();
 const PORT = 8000;
@@ -19,6 +20,8 @@ app.use(cors({
   credentials: true
 }));
 
+app.all("/api/auth/*splat", toNodeHandler(auth));
+
 // Middleware
 app.use(express.json());
 app.use(securityMiddleware);
@@ -30,9 +33,6 @@ app.get('/', (req, res) => {
 
 // Subjects routes
 app.use('/api/subjects', subjectsRouter);
-
-// Cloudinary routes
-app.use('/api/cloudinary', cloudinaryRouter);
 
 // Start server
 app.listen(PORT, () => {
