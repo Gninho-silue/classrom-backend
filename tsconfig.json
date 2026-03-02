@@ -6,8 +6,8 @@
       "ES2022"
     ],
     /* Node ESM */
-    "module": "ES2022",
-    "moduleResolution": "bundler",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     /* Project structure */
     "outDir": "dist",
     /* Type safety */
