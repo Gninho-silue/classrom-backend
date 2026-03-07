@@ -73,13 +73,21 @@ router.post("/", async (req, res) => {
     try {
         const { name, code, description, departmentId } = req.body;
 
+        if (!name?.trim() || !code?.trim()) {
+            return res.status(400).json({ error: "name and code are required" });
+        }
+
         const [created] = await db
             .insert(subjects)
-            .values({ name, code, description, departmentId })
+            .values({ name: name.trim(), code: code.trim(), description, departmentId })
             .returning();
 
         res.status(201).json({ data: created });
-    } catch (error) {
+    } catch (error: any) {
+        // Postgres unique-violation code
+        if (error?.code === "23505") {
+            return res.status(409).json({ error: "Subject code already exists" });
+        }
         console.error("POST /subjects error:", error);
         res.status(500).json({ error: "Failed to create subject" });
     }
@@ -123,9 +131,15 @@ router.put("/:id", async (req, res) => {
 
         const { name, code, description, departmentId } = req.body;
 
+        const patch: Record<string, any> = {};
+        if (name !== undefined) patch.name = name;
+        if (code !== undefined) patch.code = code;
+        if (description !== undefined) patch.description = description;
+        if (departmentId !== undefined) patch.departmentId = departmentId;
+
         const [updated] = await db
             .update(subjects)
-            .set({ name, code, description, departmentId })
+            .set(patch)
             .where(eq(subjects.id, id))
             .returning();
 

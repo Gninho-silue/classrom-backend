@@ -12,8 +12,10 @@ router.get("/", async (req, res) => {
     try {
         const { search, subject, teacher, page = 1, limit = 10 } = req.query;
 
-        const currentPage = Math.max(1, +page);
-        const limitPerPage = Math.max(1, +limit);
+        const parsedPage = parseInt(page as string, 10);
+        const parsedLimit = parseInt(limit as string, 10);
+        const currentPage = Math.max(1, Number.isNaN(parsedPage) ? 1 : parsedPage);
+        const limitPerPage = Math.max(1, Number.isNaN(parsedLimit) ? 10 : parsedLimit);
         const offset = (currentPage - 1) * limitPerPage;
 
         const filterConditions = [];
@@ -171,8 +173,10 @@ router.get("/:id/users", async (req, res) => {
             return res.status(400).json({ error: "Invalid role" });
         }
 
-        const currentPage = Math.max(1, +page);
-        const limitPerPage = Math.max(1, +limit);
+        const parsedPage = parseInt(page as string, 10);
+        const parsedLimit = parseInt(limit as string, 10);
+        const currentPage = Math.max(1, Number.isNaN(parsedPage) ? 1 : parsedPage);
+        const limitPerPage = Math.max(1, Number.isNaN(parsedLimit) ? 10 : parsedLimit);
         const offset = (currentPage - 1) * limitPerPage;
 
         const baseSelect = {
@@ -394,14 +398,33 @@ router.post("/:id/enroll", async (req, res) => {
             return res.status(400).json({ error: "studentId is required" });
         }
 
-        // Check class exists and get capacity
+        // Check class exists and get capacity + teacherId for auth check
         const [classData] = await db
-            .select({ id: classes.id, capacity: classes.capacity })
+            .select({ id: classes.id, capacity: classes.capacity, teacherId: classes.teacherId })
             .from(classes)
             .where(eq(classes.id, classId));
 
         if (!classData) {
             return res.status(404).json({ error: "Class not found" });
+        }
+
+        // Authorization: only admin or the class's own teacher may enroll students
+        const currentAuth = (req as any).user as { id: string; role: string } | undefined;
+        if (!currentAuth || (currentAuth.role !== "admin" && currentAuth.id !== classData.teacherId)) {
+            return res.status(403).json({ error: "Forbidden: only an admin or the class teacher can enroll students" });
+        }
+
+        // Validate that the target user exists and is a student
+        const [targetUser] = await db
+            .select({ id: user.id, role: user.role })
+            .from(user)
+            .where(eq(user.id, studentId));
+
+        if (!targetUser) {
+            return res.status(404).json({ error: "User not found" });
+        }
+        if (targetUser.role !== "student") {
+            return res.status(400).json({ error: "Target user is not a student" });
         }
 
         // Check current enrollment count

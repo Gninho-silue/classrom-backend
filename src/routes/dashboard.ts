@@ -62,7 +62,8 @@ router.get("/stats", async (req, res) => {
             .orderBy(desc(sql`cast(count(${enrollments.studentId}) as integer)`))
             .limit(10);
 
-        // 6. Recent activity — latest enrolled users
+        // 6. Recent activity — most recently registered users who are enrolled
+        //    (enrollments table has no createdAt; ordering by user.createdAt as a proxy)
         const recentEnrollments = await db
             .select({
                 studentName: user.name,

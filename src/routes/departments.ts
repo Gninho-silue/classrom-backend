@@ -11,8 +11,10 @@ router.get("/", async (req, res) => {
     try {
         const { search, page = 1, limit = 10 } = req.query;
 
-        const currentPage = Math.max(1, +page);
-        const limitPerPage = Math.max(1, +limit);
+        const parsedPage = parseInt(page as string, 10);
+        const parsedLimit = parseInt(limit as string, 10);
+        const currentPage = Math.max(1, Number.isNaN(parsedPage) ? 1 : parsedPage);
+        const limitPerPage = Math.max(1, Number.isNaN(parsedLimit) ? 10 : parsedLimit);
         const offset = (currentPage - 1) * limitPerPage;
 
         const filterConditions = [];
@@ -64,9 +66,22 @@ router.post("/", async (req, res) => {
     try {
         const { name, code, description } = req.body;
 
+        if (!name?.trim() || !code?.trim()) {
+            return res.status(400).json({ error: "name and code are required" });
+        }
+
+        const [existing] = await db
+            .select({ id: departments.id })
+            .from(departments)
+            .where(eq(departments.code, code.trim()));
+
+        if (existing) {
+            return res.status(400).json({ error: "department code already exists" });
+        }
+
         const [created] = await db
             .insert(departments)
-            .values({ name, code, description })
+            .values({ name: name.trim(), code: code.trim(), description })
             .returning();
 
         res.status(201).json({ data: created });
@@ -110,9 +125,14 @@ router.put("/:id", async (req, res) => {
 
         const { name, code, description } = req.body;
 
+        const patch: Record<string, any> = {};
+        if (name !== undefined) patch.name = name;
+        if (code !== undefined) patch.code = code;
+        if (description !== undefined) patch.description = description;
+
         const [updated] = await db
             .update(departments)
-            .set({ name, code, description })
+            .set(patch)
             .where(eq(departments.id, id))
             .returning();
 

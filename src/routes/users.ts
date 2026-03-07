@@ -90,11 +90,26 @@ router.get("/:id", async (req, res) => {
 router.put("/:id", async (req, res) => {
     try {
         const id = req.params.id;
+        const caller = (req as any).user as { id: string; role: string } | undefined;
         const { name, email, role: newRole, image, imageCldPubId } = req.body;
+
+        const patch: Record<string, any> = {};
+        if (name !== undefined) patch.name = name;
+        if (email !== undefined) patch.email = email;
+        if (image !== undefined) patch.image = image;
+        if (imageCldPubId !== undefined) patch.imageCldPubId = imageCldPubId;
+
+        // Only admins may change roles
+        if (newRole !== undefined) {
+            if (caller?.role !== "admin") {
+                return res.status(403).json({ error: "Forbidden: only admins can change user roles" });
+            }
+            patch.role = newRole;
+        }
 
         const [updated] = await db
             .update(user)
-            .set({ name, email, role: newRole, image, imageCldPubId })
+            .set(patch)
             .where(eq(user.id, id))
             .returning();
 
@@ -113,6 +128,11 @@ router.put("/:id", async (req, res) => {
 router.delete("/:id", async (req, res) => {
     try {
         const id = req.params.id;
+        const caller = (req as any).user as { id: string; role: string } | undefined;
+
+        if (caller?.role !== "admin" && caller?.id !== id) {
+            return res.status(403).json({ error: "Forbidden: only admins or the user themselves can delete this account" });
+        }
 
         // Check if user teaches any classes
         const teachingCount = await db

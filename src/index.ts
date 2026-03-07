@@ -58,11 +58,19 @@ app.use(async (req: Request, _res: Response, next: NextFunction) => {
 // Security middleware (rate limit + bot detection) must run BEFORE routes
 app.use(securityMiddleware);
 
-app.use('/api/subjects', subjectsRouter);
-app.use('/api/users', usersRouter);
-app.use('/api/classes', classesRouter);
-app.use('/api/departments', departmentsRouter);
-app.use('/api/dashboard', dashboardRouter);
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  next();
+}
+
+app.use('/api/subjects', requireAuth, subjectsRouter);
+app.use('/api/users', requireAuth, usersRouter);
+app.use('/api/classes', requireAuth, classesRouter);
+app.use('/api/departments', requireAuth, departmentsRouter);
+app.use('/api/dashboard', requireAuth, dashboardRouter);
 
 app.get('/', (_req, res) => {
   res.send('Hello, welcome to the Classroom API!');
