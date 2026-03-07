@@ -1,4 +1,5 @@
 import express from "express";
+import { randomBytes } from "crypto";
 import { and, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm";
 
 import { db } from "../db/index.js";
@@ -38,7 +39,7 @@ router.get("/", async (req, res) => {
             filterConditions.length > 0 ? and(...filterConditions) : undefined;
 
         const countResult = await db
-            .select({ count: sql<number>`count(*)` })
+            .select({ count: sql<number>`cast(count(*) as integer)` })
             .from(classes)
             .leftJoin(subjects, eq(classes.subjectId, subjects.id))
             .leftJoin(user, eq(classes.teacherId, user.id))
@@ -96,7 +97,7 @@ router.post("/", async (req, res) => {
             .insert(classes)
             .values({
                 subjectId,
-                inviteCode: Math.random().toString(36).substring(2, 9),
+                inviteCode: randomBytes(4).toString('hex'),
                 name,
                 teacherId,
                 bannerCldPubId,
@@ -108,7 +109,7 @@ router.post("/", async (req, res) => {
             })
             .returning({ id: classes.id });
 
-        if (!createdClass) throw Error;
+        if (!createdClass) throw new Error("Insert returned no row");
 
         res.status(201).json({ data: createdClass });
     } catch (error) {
@@ -246,6 +247,218 @@ router.get("/:id/users", async (req, res) => {
     } catch (error) {
         console.error("GET /classes/:id/users error:", error);
         res.status(500).json({ error: "Failed to fetch class users" });
+    }
+});
+
+// PUT /classes/:id — update
+router.put("/:id", async (req, res) => {
+    try {
+        const classId = Number(req.params.id);
+        if (!Number.isFinite(classId)) {
+            return res.status(400).json({ error: "Invalid class id" });
+        }
+
+        const {
+            name,
+            teacherId,
+            subjectId,
+            capacity,
+            description,
+            status,
+            bannerUrl,
+            bannerCldPubId,
+            schedules,
+        } = req.body;
+
+        const updateData: Record<string, any> = {};
+        if (name !== undefined) updateData.name = name;
+        if (teacherId !== undefined) updateData.teacherId = teacherId;
+        if (subjectId !== undefined) updateData.subjectId = subjectId;
+        if (capacity !== undefined) updateData.capacity = capacity;
+        if (description !== undefined) updateData.description = description;
+        if (status !== undefined) updateData.status = status;
+        if (bannerUrl !== undefined) updateData.bannerUrl = bannerUrl;
+        if (bannerCldPubId !== undefined) updateData.bannerCldPubId = bannerCldPubId;
+        if (schedules !== undefined) updateData.schedules = schedules;
+
+        const [updated] = await db
+            .update(classes)
+            .set(updateData)
+            .where(eq(classes.id, classId))
+            .returning();
+
+        if (!updated) {
+            return res.status(404).json({ error: "Class not found" });
+        }
+
+        res.status(200).json({ data: updated });
+    } catch (error) {
+        console.error("PUT /classes/:id error:", error);
+        res.status(500).json({ error: "Failed to update class" });
+    }
+});
+
+// DELETE /classes/:id — delete class and its enrollments
+router.delete("/:id", async (req, res) => {
+    try {
+        const classId = Number(req.params.id);
+        if (!Number.isFinite(classId)) {
+            return res.status(400).json({ error: "Invalid class id" });
+        }
+
+        // Enrollments cascade on delete, so just delete the class
+        const [deleted] = await db
+            .delete(classes)
+            .where(eq(classes.id, classId))
+            .returning({ id: classes.id });
+
+        if (!deleted) {
+            return res.status(404).json({ error: "Class not found" });
+        }
+
+        res.status(200).json({ data: deleted });
+    } catch (error) {
+        console.error("DELETE /classes/:id error:", error);
+        res.status(500).json({ error: "Failed to delete class" });
+    }
+});
+
+// POST /classes/join — student self-enrolls via invite code
+router.post("/join", async (req, res) => {
+    try {
+        const { inviteCode } = req.body;
+
+        if (!inviteCode) {
+            return res.status(400).json({ error: "inviteCode is required" });
+        }
+
+        const studentId = (req as any).user?.id;
+        if (!studentId) {
+            return res.status(401).json({ error: "Authentication required" });
+        }
+
+        const role = (req as any).user?.role;
+        if (role !== "student") {
+            return res.status(403).json({ error: "Only students can join classes via invite code" });
+        }
+
+        // Find class by invite code
+        const [classData] = await db
+            .select({ id: classes.id, capacity: classes.capacity, name: classes.name })
+            .from(classes)
+            .where(eq(classes.inviteCode, inviteCode));
+
+        if (!classData) {
+            return res.status(404).json({ error: "Invalid invite code — no class found" });
+        }
+
+        // Check capacity
+        const enrollCount = await db
+            .select({ count: sql<number>`cast(count(*) as integer)` })
+            .from(enrollments)
+            .where(eq(enrollments.classId, classData.id));
+
+        if ((enrollCount[0]?.count ?? 0) >= classData.capacity) {
+            return res.status(409).json({ error: "Class is at maximum capacity" });
+        }
+
+        // Check duplicate
+        const [existing] = await db
+            .select({ studentId: enrollments.studentId })
+            .from(enrollments)
+            .where(and(eq(enrollments.classId, classData.id), eq(enrollments.studentId, studentId)));
+
+        if (existing) {
+            return res.status(409).json({ error: "You are already enrolled in this class" });
+        }
+
+        await db.insert(enrollments).values({ studentId, classId: classData.id });
+
+        res.status(201).json({ data: { studentId, classId: classData.id, className: classData.name } });
+    } catch (error) {
+        console.error("POST /classes/join error:", error);
+        res.status(500).json({ error: "Failed to join class" });
+    }
+});
+
+// POST /classes/:id/enroll — enroll a student
+router.post("/:id/enroll", async (req, res) => {
+    try {
+        const classId = Number(req.params.id);
+        if (!Number.isFinite(classId)) {
+            return res.status(400).json({ error: "Invalid class id" });
+        }
+
+        const { studentId } = req.body;
+        if (!studentId) {
+            return res.status(400).json({ error: "studentId is required" });
+        }
+
+        // Check class exists and get capacity
+        const [classData] = await db
+            .select({ id: classes.id, capacity: classes.capacity })
+            .from(classes)
+            .where(eq(classes.id, classId));
+
+        if (!classData) {
+            return res.status(404).json({ error: "Class not found" });
+        }
+
+        // Check current enrollment count
+        const enrollCount = await db
+            .select({ count: sql<number>`cast(count(*) as integer)` })
+            .from(enrollments)
+            .where(eq(enrollments.classId, classId));
+
+        if ((enrollCount[0]?.count ?? 0) >= classData.capacity) {
+            return res.status(409).json({ error: "Class is at maximum capacity" });
+        }
+
+        // Check duplicate
+        const [existing] = await db
+            .select({ studentId: enrollments.studentId })
+            .from(enrollments)
+            .where(and(eq(enrollments.classId, classId), eq(enrollments.studentId, studentId)));
+
+        if (existing) {
+            return res.status(409).json({ error: "Student is already enrolled in this class" });
+        }
+
+        await db.insert(enrollments).values({ studentId, classId });
+
+        res.status(201).json({ data: { studentId, classId } });
+    } catch (error) {
+        console.error("POST /classes/:id/enroll error:", error);
+        res.status(500).json({ error: "Failed to enroll student" });
+    }
+});
+
+// DELETE /classes/:id/unenroll — unenroll a student
+router.delete("/:id/unenroll", async (req, res) => {
+    try {
+        const classId = Number(req.params.id);
+        if (!Number.isFinite(classId)) {
+            return res.status(400).json({ error: "Invalid class id" });
+        }
+
+        const { studentId } = req.body;
+        if (!studentId) {
+            return res.status(400).json({ error: "studentId is required" });
+        }
+
+        const [deleted] = await db
+            .delete(enrollments)
+            .where(and(eq(enrollments.classId, classId), eq(enrollments.studentId, studentId)))
+            .returning();
+
+        if (!deleted) {
+            return res.status(404).json({ error: "Enrollment not found" });
+        }
+
+        res.status(200).json({ data: { studentId, classId } });
+    } catch (error) {
+        console.error("DELETE /classes/:id/unenroll error:", error);
+        res.status(500).json({ error: "Failed to unenroll student" });
     }
 });
 
