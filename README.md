@@ -49,7 +49,7 @@ The server starts on **http://localhost:8000**.
 
 ## API
 
-All routes below require authentication (a valid session cookie). Unauthenticated requests return `401`.
+All routes below **except the Auth endpoints** (such as `/api/auth/sign-up/email` and `/api/auth/sign-in/email`) require authentication via a valid session cookie. Unauthenticated requests to protected routes return `401`.
 
 ### Auth
 

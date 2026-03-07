@@ -71,6 +71,11 @@ router.get("/", async (req, res) => {
 // POST /subjects — create
 router.post("/", async (req, res) => {
     try {
+        const currentAuth = (req as any).user as { id: string; role: string } | undefined;
+        if (currentAuth?.role !== "admin") {
+            return res.status(403).json({ error: "Forbidden: only admins can create subjects" });
+        }
+
         const { name, code, description, departmentId } = req.body;
 
         if (!name?.trim() || !code?.trim()) {
@@ -124,6 +129,11 @@ router.get("/:id", async (req, res) => {
 // PUT /subjects/:id — update
 router.put("/:id", async (req, res) => {
     try {
+        const currentAuth = (req as any).user as { id: string; role: string } | undefined;
+        if (currentAuth?.role !== "admin") {
+            return res.status(403).json({ error: "Forbidden: only admins can update subjects" });
+        }
+
         const id = Number(req.params.id);
         if (!Number.isFinite(id)) {
             return res.status(400).json({ error: "Invalid subject id" });
@@ -157,6 +167,11 @@ router.put("/:id", async (req, res) => {
 // DELETE /subjects/:id — delete (fails if classes reference it)
 router.delete("/:id", async (req, res) => {
     try {
+        const currentAuth = (req as any).user as { id: string; role: string } | undefined;
+        if (currentAuth?.role !== "admin") {
+            return res.status(403).json({ error: "Forbidden: only admins can delete subjects" });
+        }
+
         const id = Number(req.params.id);
         if (!Number.isFinite(id)) {
             return res.status(400).json({ error: "Invalid subject id" });

@@ -64,6 +64,11 @@ router.get("/", async (req, res) => {
 // POST /departments — create
 router.post("/", async (req, res) => {
     try {
+        const currentAuth = (req as any).user as { id: string; role: string } | undefined;
+        if (currentAuth?.role !== "admin") {
+            return res.status(403).json({ error: "Forbidden: only admins can create departments" });
+        }
+
         const { name, code, description } = req.body;
 
         if (!name?.trim() || !code?.trim()) {
@@ -118,6 +123,11 @@ router.get("/:id", async (req, res) => {
 // PUT /departments/:id — update
 router.put("/:id", async (req, res) => {
     try {
+        const currentAuth = (req as any).user as { id: string; role: string } | undefined;
+        if (currentAuth?.role !== "admin") {
+            return res.status(403).json({ error: "Forbidden: only admins can update departments" });
+        }
+
         const id = Number(req.params.id);
         if (!Number.isFinite(id)) {
             return res.status(400).json({ error: "Invalid department id" });
@@ -150,6 +160,11 @@ router.put("/:id", async (req, res) => {
 // DELETE /departments/:id — delete (will fail if subjects reference it)
 router.delete("/:id", async (req, res) => {
     try {
+        const currentAuth = (req as any).user as { id: string; role: string } | undefined;
+        if (currentAuth?.role !== "admin") {
+            return res.status(403).json({ error: "Forbidden: only admins can delete departments" });
+        }
+
         const id = Number(req.params.id);
         if (!Number.isFinite(id)) {
             return res.status(400).json({ error: "Invalid department id" });

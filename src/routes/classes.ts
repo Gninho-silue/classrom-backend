@@ -84,6 +84,11 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
     try {
+        const currentAuth = (req as any).user as { id: string; role: string } | undefined;
+        if (!currentAuth || (currentAuth.role !== "admin" && currentAuth.role !== "teacher")) {
+            return res.status(403).json({ error: "Forbidden: only admins or teachers can create classes" });
+        }
+
         const {
             name,
             teacherId,
@@ -262,6 +267,20 @@ router.put("/:id", async (req, res) => {
             return res.status(400).json({ error: "Invalid class id" });
         }
 
+        const currentAuth = (req as any).user as { id: string; role: string } | undefined;
+        if (currentAuth) {
+            const [targetClass] = await db
+                .select({ teacherId: classes.teacherId })
+                .from(classes)
+                .where(eq(classes.id, classId));
+            if (!targetClass) {
+                return res.status(404).json({ error: "Class not found" });
+            }
+            if (currentAuth.role !== "admin" && currentAuth.id !== targetClass.teacherId) {
+                return res.status(403).json({ error: "Forbidden: only an admin or the class teacher can update this class" });
+            }
+        }
+
         const {
             name,
             teacherId,
@@ -308,6 +327,20 @@ router.delete("/:id", async (req, res) => {
         const classId = Number(req.params.id);
         if (!Number.isFinite(classId)) {
             return res.status(400).json({ error: "Invalid class id" });
+        }
+
+        const currentAuth = (req as any).user as { id: string; role: string } | undefined;
+        if (currentAuth) {
+            const [targetClass] = await db
+                .select({ teacherId: classes.teacherId })
+                .from(classes)
+                .where(eq(classes.id, classId));
+            if (!targetClass) {
+                return res.status(404).json({ error: "Class not found" });
+            }
+            if (currentAuth.role !== "admin" && currentAuth.id !== targetClass.teacherId) {
+                return res.status(403).json({ error: "Forbidden: only an admin or the class teacher can delete this class" });
+            }
         }
 
         // Enrollments cascade on delete, so just delete the class
@@ -467,6 +500,20 @@ router.delete("/:id/unenroll", async (req, res) => {
         const { studentId } = req.body;
         if (!studentId) {
             return res.status(400).json({ error: "studentId is required" });
+        }
+
+        const currentAuth = (req as any).user as { id: string; role: string } | undefined;
+        if (currentAuth) {
+            const [targetClass] = await db
+                .select({ teacherId: classes.teacherId })
+                .from(classes)
+                .where(eq(classes.id, classId));
+            if (!targetClass) {
+                return res.status(404).json({ error: "Class not found" });
+            }
+            if (currentAuth.role !== "admin" && currentAuth.id !== targetClass.teacherId) {
+                return res.status(403).json({ error: "Forbidden: only an admin or the class teacher can unenroll students" });
+            }
         }
 
         const [deleted] = await db
